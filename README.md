@@ -9,7 +9,8 @@ Note:
 - To update the file source, goto sentimentAnalysis.py file, change the test_directory to the directory of the new file. 
 Also update this name in line 17 and line 18 of the code (replace pos_directory with test_directory).
 - If a custom review is to be tested, update the "test_sentence" variable in the sentimentAnalysis.py file and 
-replace  "sentence" in line 26 with "test_sentence"
+replace  "sentence" in line 26 with "test_sentence".
+For example: if the test sentence is "It was a good movie", update this string to the variable test_sentence and replace the variable "sentence" in line 26 with "test_sentence"
 
 *******************************************************
 
