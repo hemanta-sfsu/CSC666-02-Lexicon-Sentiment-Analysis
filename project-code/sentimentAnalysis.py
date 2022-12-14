@@ -6,6 +6,7 @@ import new_try_heuristics
 neg_directory = 'aclImdb/train/neg/'
 pos_directory = 'aclImdb/train/pos/'
 test_directory = 'aclImdb/train/unsup/'
+test_sentence = ''
 f1 = new_try_heuristics
 n = 1000
 reviews = [['Reviews\t\t\t\t\t\t\t||',
