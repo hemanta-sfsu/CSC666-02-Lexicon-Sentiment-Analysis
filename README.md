@@ -26,6 +26,6 @@ Optional:
 
 In terminal: 
 
-To run the program: make run
-To clean the program cache: make clean
-To view the result: make view-result
+- To run the program: make run
+- To clean the program cache: make clean
+- To view the result: make view-result
