@@ -1,4 +1,4 @@
-File that builds the lexicon: buildLexicon.py
+File that builds the lexicon: buildLexicon.py "\n"
 File that takes in the movie review that needs to be analyzed: sentimentAnalysis.py
 
 *******************************************************
