@@ -1,3 +1,6 @@
+# Full version of this code can be found
+# @ https://github.com/cjhutto/vaderSentiment/blob/master/vaderSentiment/vaderSentiment.py
+
 import os
 import math
 import string
@@ -23,6 +26,18 @@ Heuristics:
 B_WO = 0.293
 D_WO = -0.293
 C_WO = 0.733
+N_SCALAR = -0.74
+
+
+NEGATE = \
+    ["aint", "arent", "cannot", "cant", "couldnt", "darent", "didnt", "doesnt",
+     "ain't", "aren't", "can't", "couldn't", "daren't", "didn't", "doesn't",
+     "dont", "hadnt", "hasnt", "havent", "isnt", "mightnt", "mustnt", "neither",
+     "don't", "hadn't", "hasn't", "haven't", "isn't", "mightn't", "mustn't",
+     "neednt", "needn't", "never", "none", "nope", "nor", "not", "nothing", "nowhere",
+     "oughtnt", "shant", "shouldnt", "uhuh", "wasnt", "werent",
+     "oughtn't", "shan't", "shouldn't", "uh-uh", "wasn't", "weren't",
+     "without", "wont", "wouldnt", "won't", "wouldn't", "rarely", "seldom", "despite"]
 
 
 BOOSTER_DICT = \
@@ -51,7 +66,28 @@ BOOSTER_DICT = \
      "sort of": D_WO, "sorta": D_WO, "sortof": D_WO, "sort-of": D_WO}
 
 
+def negated(input_words, include_nt=True):
+    """
+    Determine if input contains negation words
+    """
+    input_words = [str(w).lower() for w in input_words]
+    neg_words = []
+    neg_words.extend(NEGATE)
+    for word in neg_words:
+        if word in input_words:
+            return True
+    if include_nt:
+        for word in input_words:
+            if "n't" in word:
+                return True
+    '''if "least" in input_words:
+        i = input_words.index("least")
+        if i > 0 and input_words[i - 1] != "at":
+            return True'''
+    return False
 # normalizing function from vader sentiment
+
+
 def normalize(score, alpha=15):
     """
     Normalize the score to be between -1 and 1 using an alpha that
@@ -144,7 +180,7 @@ class SentiText(object):
 
 
 class SentimentAnalyzer(object):
-    def __init__(self, lexicon_file="vader_lexicon.txt"):
+    def __init__(self, lexicon_file="LexiconDictionary.csv"):
         _this_module_file_path_ = os.path.abspath(getsourcefile(lambda: 0))
         lexicon_full_filepath = os.path.join(
             os.path.dirname(_this_module_file_path_), lexicon_file)
@@ -160,7 +196,7 @@ class SentimentAnalyzer(object):
         for line in self.lexicon_full_filepath.rstrip('\n').split('\n'):
             if not line:
                 continue
-            (word, measure) = line.strip().split('\t')[0:2]
+            (word, measure) = line.strip().split(',')[0:2]
             lex_dict[word] = float(measure)
         return lex_dict
 
@@ -184,6 +220,8 @@ class SentimentAnalyzer(object):
             sentiments = self.sentiment_valence(
                 valence, sentitext, item, i, sentiments)
 
+        sentiments = self._but_check(words_, sentiments)
+
         valence_dict = self.score_valence(sentiments, text)
 
         return valence_dict
@@ -195,6 +233,15 @@ class SentimentAnalyzer(object):
         if item_lowercase in self.lexicon:
             # get the sentiment valence
             valence = self.lexicon[item_lowercase]
+
+            # check for "no" as negation for an adjacent lexicon item vs "no" as its own stand-alone lexicon item
+            if item_lowercase == "no" and i != len(words_)-1 and words_[i + 1].lower() in self.lexicon:
+                # don't use valence of "no" as a lexicon item. Instead set it's valence to 0.0 and negate the next item
+                valence = 0.0
+            if (i > 0 and words_[i - 1].lower() == "no") \
+               or (i > 1 and words_[i - 2].lower() == "no") \
+               or (i > 2 and words_[i - 3].lower() == "no" and words_[i - 1].lower() in ["or", "nor"]):
+                valence = self.lexicon[item_lowercase] * N_SCALAR
 
             # check if sentiment laden word is in ALL CAPS (while others aren't)
             if item.isupper() and is_cap_diff:
@@ -218,6 +265,55 @@ class SentimentAnalyzer(object):
 
         sentiments.append(valence)
         return sentiments
+
+    @staticmethod
+    def _but_check(words_and_emoticons, sentiments):
+        # check for modification in sentiment due to contrastive conjunction 'but'
+        words_and_emoticons_lower = [str(w).lower()
+                                     for w in words_and_emoticons]
+        if 'but' in words_and_emoticons_lower:
+            bi = words_and_emoticons_lower.index('but')
+            for sentiment in sentiments:
+                si = sentiments.index(sentiment)
+                if si < bi:
+                    sentiments.pop(si)
+                    sentiments.insert(si, sentiment * 0.5)
+                elif si > bi:
+                    sentiments.pop(si)
+                    sentiments.insert(si, sentiment * 1.5)
+        return sentiments
+
+    @staticmethod
+    def _negation_check(valence, words_and_emoticons, start_i, i):
+        words_and_emoticons_lower = [str(w).lower()
+                                     for w in words_and_emoticons]
+        if start_i == 0:
+            # 1 word preceding lexicon word (w/o stopwords)
+            if negated([words_and_emoticons_lower[i - (start_i + 1)]]):
+                valence = valence * N_SCALAR
+        if start_i == 1:
+            if words_and_emoticons_lower[i - 2] == "never" and \
+                    (words_and_emoticons_lower[i - 1] == "so" or
+                     words_and_emoticons_lower[i - 1] == "this"):
+                valence = valence * 1.25
+            elif words_and_emoticons_lower[i - 2] == "without" and \
+                    words_and_emoticons_lower[i - 1] == "doubt":
+                valence = valence
+            # 2 words preceding the lexicon word position
+            elif negated([words_and_emoticons_lower[i - (start_i + 1)]]):
+                valence = valence * N_SCALAR
+        if start_i == 2:
+            if words_and_emoticons_lower[i - 3] == "never" and \
+                    (words_and_emoticons_lower[i - 2] == "so" or words_and_emoticons_lower[i - 2] == "this") or \
+                    (words_and_emoticons_lower[i - 1] == "so" or words_and_emoticons_lower[i - 1] == "this"):
+                valence = valence * 1.25
+            elif words_and_emoticons_lower[i - 3] == "without" and \
+                    (words_and_emoticons_lower[i - 2] == "doubt" or words_and_emoticons_lower[i - 1] == "doubt"):
+                valence = valence
+            # 3 words preceding the lexicon word position
+            elif negated([words_and_emoticons_lower[i - (start_i + 1)]]):
+                valence = valence * N_SCALAR
+        return valence
 
     @staticmethod
     def _sift_sentiment_scores(sentiments):
